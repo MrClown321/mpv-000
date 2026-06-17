@@ -39,19 +39,19 @@ local function register_event_handler(t)
     handle_counter = handle_counter + 1
     latest_handler_id = handler_id
 
-    mp.register_script_message(handler_id, function (type, args)
-        if type == "closed" then
+    mp.register_script_message(handler_id, function (event, args)
+        if event == "closed" then
             mp.unregister_script_message(handler_id)
         end
 
         -- do not process events (other than closed) for an input that has been overwritten
-        if not t[type] or (latest_handler_id ~= handler_id and type ~= "closed") then
+        if not t[event] or (latest_handler_id ~= handler_id and event ~= "closed") then
             return
         end
 
         args = utils.parse_json(args or "") or {}
 
-        if type == "complete" then
+        if event == "complete" then
             local function complete(completions, completion_pos, completion_append)
                 if not completions then
                     return
@@ -68,9 +68,9 @@ local function register_event_handler(t)
             end
 
             args[2] = complete
-            complete(t[type](unpack(args)))
+            complete(t[event](unpack(args)))
         else
-            t[type](unpack(args))
+            t[event](unpack(args))
         end
     end)
 
@@ -87,13 +87,19 @@ local function input_request(t)
 end
 
 function input.get(t)
+    t.prompt = tostring(t.prompt or "")
+
     -- input.select does not support log buffers, so cannot override the latest id.
-    t.id = t.id or mp.get_script_name()..(t.prompt or "")
+    t.id = t.id or mp.get_script_name() .. t.prompt
     latest_log_id = t.id
     return input_request(t)
 end
 
-input.select = input_request
+function input.select(t)
+    -- Ensures that console.lua treats this request as a select request.
+    t.items = t.items or {}
+    return input_request(t)
+end
 
 function input.terminate()
     mp.commandv("script-message-to", "console", "disable", utils.format_json({

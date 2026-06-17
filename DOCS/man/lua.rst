@@ -61,8 +61,7 @@ that uses the ``.foo`` file extension.
 mpv also appends the top level directory of the script to the start of Lua's
 package path so you can import scripts from there too. Be aware that this will
 shadow Lua libraries that use the same package path. (Single file scripts do not
-include mpv specific directories in the Lua package path. This was silently
-changed in mpv 0.32.0.)
+include mpv specific directories in the Lua package path.)
 
 Using a script directory is the recommended way to package a script that
 consists of multiple source files, or requires other files (you can use
@@ -100,17 +99,14 @@ The event loop will wait for events and dispatch events registered with
 ``mp.register_event``. It will also handle timers added with ``mp.add_timeout``
 and similar (by waiting with a timeout).
 
-Since mpv 0.6.0, the player will wait until the script is fully loaded before
-continuing normal operation. The player considers a script as fully loaded as
-soon as it starts waiting for mpv events (or it exits). In practice this means
-the player will more or less hang until the script returns from the main chunk
-(and ``mp_event_loop`` is called), or the script calls ``mp_event_loop`` or
+The player will wait until the script is fully loaded before continuing normal
+operation. The player considers a script as fully loaded as soon as it starts
+waiting for mpv events (or it exits). In practice this means the player will
+more or less hang until the script returns from the main chunk (and
+``mp_event_loop`` is called), or the script calls ``mp_event_loop`` or
 ``mp.dispatch_events`` directly. This is done to make it possible for a script
-to fully setup event handlers etc. before playback actually starts. In older
-mpv versions, this happened asynchronously. With mpv 0.29.0, this changes
-slightly, and it merely waits for scripts to be loaded in this manner before
-starting playback as part of the player initialization phase. Scripts run though
-initialization in parallel. This might change again.
+to fully setup event handlers etc. before playback actually starts. Scripts run
+though initialization in parallel.
 
 mp functions
 ------------
@@ -159,11 +155,14 @@ The ``mp`` module is preloaded, although it can be loaded manually with
     ``mp.commandv()`` (but can be a native type instead of a string).
 
     If the table contains string keys, it's interpreted as command with named
-    arguments. This requires at least an entry with the key ``name`` to be
-    present, which must be a string, and contains the command name. The special
-    entry ``_flags`` is optional, and if present, must be an array of
-    `Input Command Prefixes`_ to apply. All other entries are interpreted as
-    arguments.
+    arguments. This requires at least an entry with the key ``_name`` to be
+    present, which must be a string, and contains the command name.
+    For compatibility, if the key ``_name`` does not exist, then the entry with
+    the key ``name`` will be used instead. The special entry ``_flags`` is
+    optional, and if present, must be an array of `Input Command Prefixes`_ to
+    apply. All other entries are interpreted as arguments. Note that some
+    commands have arguments named ``name``, and can only be used if the command
+    name is specified with key ``_name`` instead of ``name``.
 
     Returns a result table on success (usually empty), or ``def, error`` on
     error. ``def`` is the second parameter provided to the function, and is
@@ -850,7 +849,7 @@ strictly part of the guaranteed API.
     - rename ``cancellable`` field to ``playback_only``
     - rename ``max_size`` to ``capture_size``
     - set ``capture_stdout`` field to ``true`` if unset
-    - set ``name`` field to ``subprocess``
+    - set ``_name`` field to ``subprocess``
     - call ``mp.command_native(copied_t)``
     - if the command failed, create a dummy result table
     - copy ``error_string`` to ``error`` field if the string is non-empty
@@ -913,8 +912,7 @@ strictly part of the guaranteed API.
 mp.input functions
 --------------------
 
-This module lets scripts get textual input from the user using the console
-REPL.
+This module lets scripts get textual input from the user using the console.
 
 ``input.get(table)``
     Show the console to let the user enter text.
@@ -987,6 +985,11 @@ REPL.
         among the ones stored for ``input.get()`` calls. Defaults to the calling
         script name with ``prompt`` appended.
 
+    ``console_opt_overrides``
+        A table containing configuration overrides for the console script.
+        Can be used to change the visual style of the text input, among other things.
+        See `CONSOLE`_ for the full list of options.
+
 ``input.terminate()``
     Closes any currently active input request. This will not close
     requests made by other scripts.
@@ -1041,6 +1044,27 @@ REPL.
         If calling ``input.get()`` or ``input.select()`` again from inside the
         ``submit`` callback, setting this option to ``true`` allows a seamless
         transition without the console closing and reopening.
+
+    ``opened``
+        A callback invoked when the console is shown. This can be used to
+        override keybinds set by the console with ``mp.add_forced_key_binding()``.
+
+    ``closed``
+        A callback invoked when the console is hidden, either because
+        ``input.terminate()`` was invoked from the other callbacks, or because
+        the user closed it with a key binding. The first argument is the text in
+        the console, and the second argument is the cursor position.
+
+    ``default_text``
+        A string to pre-fill the input field with.
+
+    ``cursor_position``
+        The initial cursor position, starting from 1.
+
+    ``console_opt_overrides``
+        A table containing configuration overrides for the console script.
+        Can be used to change the visual style of the select window, among other things.
+        See `CONSOLE`_ for the full list of options.
 
     Example:
 
