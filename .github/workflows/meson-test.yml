@@ -1,0 +1,87 @@
+name: meson-test
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches: [master]
+    paths:
+      - '**/*.c'
+      - '**/*.h'
+      - 'meson.build'
+      - 'meson.options'
+      - 'test/**'
+  push:
+    branches: [master]
+    paths:
+      - '**/*.c'
+      - '**/*.h'
+      - 'meson.build'
+      - 'meson.options'
+      - 'test/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container:
+      image: "registry.opensuse.org/home/mia/images/images/mpv-ci:stable-deps"
+      env:
+        CC: "gcc"
+        CXX: "g++"
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install lcov
+        run: |
+          zypper --non-interactive install lcov
+
+      - name: Build with meson (PR - no coverage)
+        if: github.event_name == 'pull_request'
+        id: build_pr
+        run: |
+          meson setup build \
+            --werror \
+            -Dlibmpv=true \
+            -Dtests=true
+          meson compile -C build
+
+      - name: Build with meson (push - with coverage)
+        if: github.event_name != 'pull_request'
+        id: build_push
+        run: |
+          meson setup build \
+            --werror \
+            -Dlibmpv=true \
+            -Dtests=true \
+            -Db_coverage=true
+          meson compile -C build
+
+      - name: Print meson log
+        if: failure() && (steps.build_pr.outcome == 'failure' || steps.build_push.outcome == 'failure')
+        run: cat ./build/meson-logs/meson-log.txt
+
+      - name: Run meson tests
+        run: meson test -C build
+
+      - name: Print meson test log
+        if: failure()
+        run: cat ./build/meson-logs/testlog.txt
+
+      - name: Collect coverage report
+        if: github.event_name != 'pull_request'
+        run: |
+          mkdir -p coverage
+          lcov --capture --directory build --output-file coverage/lcov.info \
+            --exclude '/usr/*' --exclude '*/test/*' --exclude '*/subprojects/*'
+
+      - name: Upload coverage report
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v5
+        with:
+          name: coverage-report
+          path: coverage/lcov.info

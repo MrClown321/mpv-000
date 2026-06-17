@@ -30,6 +30,8 @@ jobs:
       matrix:
         sanitizer: [address, undefined, memory]
     steps:
+    - name: Checkout
+      uses: actions/checkout@v4
     - name: Build Fuzzers (${{ matrix.sanitizer }})
       id: build
       uses: google/oss-fuzz/infra/cifuzz/actions/build_fuzzers@master
